@@ -14,7 +14,7 @@ from .config import Config
 from .errors import AbercrombieClientError
 
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 
 def _add_runtime_arguments(
@@ -29,6 +29,14 @@ def _add_runtime_arguments(
         default=Path("diagnostics"),
     )
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument(
+        "--browser-headers",
+        type=Path,
+        help=(
+            "Archivo JSON/HAR o texto Nombre: valor capturado desde "
+            "DevTools. Cookie y headers administrados por requests se ignoran."
+        ),
+    )
     if allow_no_bootstrap:
         parser.add_argument(
             "--no-bootstrap",
@@ -57,6 +65,12 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {VERSION}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    headers = subparsers.add_parser(
+        "headers",
+        help="Muestra los headers efectivos sin hacer solicitudes.",
+    )
+    _add_runtime_arguments(headers, allow_no_bootstrap=False)
 
     probe = subparsers.add_parser(
         "probe",
@@ -105,7 +119,21 @@ def main() -> int:
     )
     try:
         with AbercrombieClient(config) as client:
-            if args.command == "probe":
+            if args.browser_headers:
+                import_result = client.load_browser_headers(args.browser_headers)
+                if not args.quiet:
+                    print(
+                        "[*] Headers capturados aplicados: "
+                        f"{len(import_result['applied'])}"
+                    )
+                    print(
+                        "[*] Headers capturados ignorados: "
+                        f"{len(import_result['ignored'])}"
+                    )
+
+            if args.command == "headers":
+                result = client.header_report()
+            elif args.command == "probe":
                 result = client.probe()
             elif args.command == "signin":
                 result = client.sign_in(
@@ -138,6 +166,11 @@ def main() -> int:
                 )
             print(json.dumps(result, indent=2, ensure_ascii=False))
             return 0
-    except (requests.RequestException, AbercrombieClientError, ValueError) as exc:
+    except (
+        OSError,
+        requests.RequestException,
+        AbercrombieClientError,
+        ValueError,
+    ) as exc:
         print(f"[!] {exc}", file=sys.stderr)
         return 1
