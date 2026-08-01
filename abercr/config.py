@@ -21,6 +21,8 @@ class Config:
     bootstrap_retries: int = 2
     diagnostics_dir: Path = Path("diagnostics")
     verbose: bool = True
+    accept_language: str = "es-EC,es;q=0.9,en;q=0.7"
+    send_fetch_metadata: bool = True
     user_agent: str = (
         "Browser/immroa/0.0.1 "
         "(HackerOne User, https://hackerone.com/immroa?type=user)"
@@ -35,6 +37,8 @@ class Config:
             raise ValueError("timeout debe ser mayor que 0.")
         if self.bootstrap_retries < 0:
             raise ValueError("bootstrap_retries no puede ser negativo.")
+        if not self.accept_language.strip():
+            raise ValueError("accept_language no puede estar vacío.")
 
     @property
     def api_url(self) -> str:
@@ -60,14 +64,14 @@ class Config:
         headers = {
             "User-Agent": self.user_agent,
             "X-Bug-Bounty": self.bug_bounty_header,
-            "Accept-Language": "es-EC,es;q=0.9,en;q=0.7",
+            "Accept-Language": self.accept_language,
         }
         headers.update(self.extra_headers)
         return headers
 
     @property
     def navigation_headers(self) -> dict[str, str]:
-        return {
+        headers = {
             **self.common_headers,
             "Accept": (
                 "text/html,application/xhtml+xml,application/xml;q=0.9,"
@@ -77,9 +81,20 @@ class Config:
             "Pragma": "no-cache",
             "Upgrade-Insecure-Requests": "1",
         }
+        if self.send_fetch_metadata:
+            headers.update(
+                {
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-User": "?1",
+                    "Sec-Fetch-Dest": "document",
+                    "Priority": "u=0, i",
+                }
+            )
+        return headers
 
     def graphql_headers(self, referer: str) -> dict[str, str]:
-        return {
+        headers = {
             **self.common_headers,
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
@@ -88,3 +103,13 @@ class Config:
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
         }
+        if self.send_fetch_metadata:
+            headers.update(
+                {
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Dest": "empty",
+                    "Priority": "u=1, i",
+                }
+            )
+        return headers
